@@ -11,6 +11,15 @@ export interface OllamaGenerateResponse {
   done: boolean;
 }
 
+export interface OllamaEmbeddingRequest {
+  model: string;
+  prompt: string;
+}
+
+export interface OllamaEmbeddingResponse {
+  embedding: number[];
+}
+
 export interface AskParams {
   model: string;
   prompt: string;
@@ -26,4 +35,12 @@ export interface RepoIndex {
   root: string;
   generatedAt: string;
   entries: IndexEntry[];
+}
+
+export interface EmbeddingChunk {
+  id: number;
+  file: string; // path relative to repo root
+  start: number; // character offset
+  end: number; // character offset (exclusive)
+  embedding: number[];
 }

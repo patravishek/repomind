@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { askOllama, checkOllamaHealth } from './ollamaClient';
 import { buildRepoIndex } from './indexer';
 import { buildPromptWithContext } from './context';
+import { buildEmbeddingIndex } from './embeddingIndex';
 
 const program = new Command();
 
@@ -27,7 +28,7 @@ program
     }
 
     try {
-      const { prompt, usedFiles } = buildPromptWithContext(question, {
+      const { prompt, usedFiles } = await buildPromptWithContext(question, {
         startDir: process.cwd(),
       });
 
@@ -55,7 +56,7 @@ program
   });
 
 program
-  .command('index')
+.command('index')
   .description('Index a repository for context-aware queries.')
   .argument('[path]', 'Path to repository', '.')
   .option('-o, --output <output>', 'Path to index JSON file (default: .repomind-index.json in repo root)')
@@ -63,7 +64,14 @@ program
     '-e, --ext <ext...>',
     'Extra file extensions to include (e.g. .md .yml)',
   )
-  .action((pathArg: string, options: { output?: string; ext?: string[] }) => {
+  .option(
+    '--with-embeddings',
+    'Also build an embedding index using Ollama (writes .repomind-vec.json)',
+  )
+  .action(async (
+    pathArg: string,
+    options: { output?: string; ext?: string[]; withEmbeddings?: boolean },
+  ) => {
     const rootDir = pathArg || '.';
 
     console.log(`📚 Building index for: ${rootDir}`);
@@ -75,7 +83,17 @@ program
       });
 
       console.log(`✅ Indexed ${index.entries.length} files.`);
-      console.log(`📄 Index written to: ${options.output ?? `${index.root}/.repomind-index.json`}`);
+      console.log(
+        `📄 Index written to: ${
+          options.output ?? `${index.root}/.repomind-index.json`
+        }`,
+      );
+
+      if (options.withEmbeddings) {
+        console.log('📐 Building embedding index (this may take a while)...');
+        await buildEmbeddingIndex({ rootDir: index.root, index });
+        console.log('✅ Embedding index written to .repomind-vec.json');
+      }
     } catch (err) {
       const error = err as Error;
       console.error('❌ Failed to build index:', error.message || error);

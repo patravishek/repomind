@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { RepoIndex } from './types';
+import { EmbeddingChunk, RepoIndex } from './types';
+import { embedText } from './ollamaClient';
 
 export interface BuildContextOptions {
   /** Directory where the user invoked repomind. */
@@ -43,6 +44,24 @@ function loadIndex(startDir: string): RepoIndex | null {
     const raw = fs.readFileSync(indexPath, 'utf8');
     const index = JSON.parse(raw) as RepoIndex;
     return index;
+  } catch {
+    return null;
+  }
+}
+
+function loadEmbeddingIndex(index: RepoIndex): EmbeddingChunk[] | null {
+  const vecPath = path.join(index.root, '.repomind-vec.json');
+  if (!fs.existsSync(vecPath)) {
+    return null;
+  }
+
+  try {
+    const raw = fs.readFileSync(vecPath, 'utf8');
+    const data = JSON.parse(raw) as EmbeddingChunk[];
+    if (!Array.isArray(data)) {
+      return null;
+    }
+    return data;
   } catch {
     return null;
   }
@@ -108,10 +127,94 @@ function readFileSnippet(absPath: string, maxCharsPerFile: number): string | nul
   }
 }
 
-export function buildPromptWithContext(
+function cosineSim(a: Float32Array, b: Float32Array): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    const x = a[i];
+    const y = b[i];
+    dot += x * y;
+    na += x * x;
+    nb += y * y;
+  }
+  return dot / (Math.sqrt(na) * Math.sqrt(nb) + 1e-8);
+}
+
+async function buildPromptFromEmbeddings(
+  question: string,
+  index: RepoIndex,
+  embeddingChunks: EmbeddingChunk[],
+  maxCharsPerFile: number,
+): Promise<{ prompt: string; usedFiles: string[] }> {
+  if (embeddingChunks.length === 0) {
+    return {
+      prompt: question,
+      usedFiles: [],
+    };
+  }
+
+  const questionEmbedding = await embedText(question);
+  const qVec = new Float32Array(questionEmbedding);
+
+  const scored = embeddingChunks.map((chunk) => {
+    const v = new Float32Array(chunk.embedding);
+    return {
+      chunk,
+      score: cosineSim(qVec, v),
+    };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+
+  const topChunks = scored.slice(0, 10).map((s) => s.chunk);
+
+  const contextBlocks: string[] = [];
+  const usedFilesSet = new Set<string>();
+
+  for (const ch of topChunks) {
+    const absPath = path.join(index.root, ch.file);
+    const snippet = readFileSnippet(absPath, maxCharsPerFile);
+    if (!snippet) continue;
+
+    usedFilesSet.add(ch.file);
+    contextBlocks.push(
+      `FILE: ${ch.file} [${ch.start}-${ch.end}]
+-----
+${snippet}
+-----`,
+    );
+  }
+
+  const usedFiles = Array.from(usedFilesSet);
+
+  if (contextBlocks.length === 0) {
+    // Fallback: no readable chunks, so just use question.
+    return {
+      prompt: question,
+      usedFiles: [],
+    };
+  }
+
+  const contextText = contextBlocks.join('\n\n');
+
+  const prompt =
+    'You are a helpful assistant for answering questions about this codebase.\n' +
+    'You are given a set of file snippets as context. Use them when relevant, ' +
+    'but do not hallucinate details that are not supported by the snippets.\n\n' +
+    'Context:\n' +
+    contextText +
+    '\n\nQuestion: ' +
+    question +
+    '\n\nAnswer in a concise way and, when useful, mention which files you are using.';
+
+  return { prompt, usedFiles };
+}
+
+export async function buildPromptWithContext(
   question: string,
   options: BuildContextOptions = {},
-): { prompt: string; usedFiles: string[] } {
+): Promise<{ prompt: string; usedFiles: string[] }> {
   const startDir = options.startDir ?? process.cwd();
   const maxFiles = options.maxFiles ?? 5;
   const maxCharsPerFile = options.maxCharsPerFile ?? 2000;
@@ -125,6 +228,17 @@ export function buildPromptWithContext(
       `Question: ${question}`;
 
     return { prompt: fallbackPrompt, usedFiles: [] };
+  }
+
+  const embeddingChunks = loadEmbeddingIndex(index);
+
+  if (embeddingChunks && embeddingChunks.length > 0) {
+    return await buildPromptFromEmbeddings(
+      question,
+      index,
+      embeddingChunks,
+      maxCharsPerFile,
+    );
   }
 
   const keywords = extractKeywords(question);

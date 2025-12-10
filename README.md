@@ -8,7 +8,8 @@ A local-first AI assistant that helps you explore and understand your code repos
 
 > Status: early MVP. The tool currently supports:
 > - Building a simple index of your repo files.
-> - Asking questions that use file-path-based context from that index.
+> - Optionally building an embedding index for semantic search.
+> - Asking questions that use repo context from file paths or embeddings.
 
 ---
 
@@ -115,6 +116,19 @@ This will:
 
 You can optionally:
 
+- Build an **embedding index** (semantic search) at the same time:
+
+  ```bash
+  repomind index . --with-embeddings
+  ```
+
+  This will create a `.repomind-vec.json` file alongside `.repomind-index.json` with per-chunk embeddings.
+  For this, you should pull an embedding model in Ollama, for example:
+
+  ```bash
+  ollama pull nomic-embed-text
+  ```
+
 - Specify a custom output path:
 
   ```bash
@@ -210,6 +224,7 @@ repomind ask <question...> [--model <model>]
   - Options:
     - `--output <output>`: custom index file path.
     - `--ext <ext...>`: extra file extensions to include.
+    - `--with-embeddings`: also build `.repomind-vec.json` using Ollama embeddings.
 
 - `ask <question...>`
   - Ask a natural-language question.
