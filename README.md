@@ -272,3 +272,7 @@ Then in another terminal, run the CLI as usual.
 - Optional VS Code or JetBrains plugin integrating the CLI.
 
 Contributions and issues are welcome.
+
+## License
+
+This project is licensed under the MIT License. See the `LICENSE` file for details.
