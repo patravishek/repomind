@@ -1,0 +1,41 @@
+{
+  "root": "/Users/avishekpatra/Projects/repomind",
+  "generatedAt": "2025-12-10T20:13:06.394Z",
+  "entries": [
+    {
+      "path": "package-lock.json",
+      "size": 1965,
+      "ext": ".json"
+    },
+    {
+      "path": "package.json",
+      "size": 768,
+      "ext": ".json"
+    },
+    {
+      "path": "src/cli.ts",
+      "size": 2367,
+      "ext": ".ts"
+    },
+    {
+      "path": "src/indexer.ts",
+      "size": 2688,
+      "ext": ".ts"
+    },
+    {
+      "path": "src/ollamaClient.ts",
+      "size": 1115,
+      "ext": ".ts"
+    },
+    {
+      "path": "src/types.ts",
+      "size": 462,
+      "ext": ".ts"
+    },
+    {
+      "path": "tsconfig.json",
+      "size": 477,
+      "ext": ".json"
+    }
+  ]
+}
