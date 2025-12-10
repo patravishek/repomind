@@ -1,4 +1,4 @@
-# repomind
+# Repomind
 
 A local-first AI assistant that helps you explore and understand your code repositories.
 
