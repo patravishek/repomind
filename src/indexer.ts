@@ -38,6 +38,11 @@ const DEFAULT_IGNORE_DIRS = new Set([
   'out',
   '.next',
   '.turbo',
+  // Common Python virtualenv / cache dirs
+  '.venv',
+  'venv',
+  '.tox',
+  '__pycache__',
 ]);
 
 export interface IndexOptions {
