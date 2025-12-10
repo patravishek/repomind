@@ -12,6 +12,15 @@ export interface BuildContextOptions {
   maxCharsPerFile?: number;
 }
 
+export interface BuildContextResult {
+  /** Final prompt to send to the LLM. */
+  prompt: string;
+  /** Relative file paths that were used as context (if any). */
+  usedFiles: string[];
+  /** Repository root directory for the used files (if known). */
+  rootDir?: string;
+}
+
 function findIndexFile(startDir: string): string | null {
   let current = path.resolve(startDir);
 
@@ -146,11 +155,12 @@ async function buildPromptFromEmbeddings(
   index: RepoIndex,
   embeddingChunks: EmbeddingChunk[],
   maxCharsPerFile: number,
-): Promise<{ prompt: string; usedFiles: string[] }> {
+): Promise<BuildContextResult> {
   if (embeddingChunks.length === 0) {
     return {
       prompt: question,
       usedFiles: [],
+      rootDir: index.root,
     };
   }
 
@@ -193,6 +203,7 @@ ${snippet}
     return {
       prompt: question,
       usedFiles: [],
+      rootDir: index.root,
     };
   }
 
@@ -208,13 +219,13 @@ ${snippet}
     question +
     '\n\nAnswer in a concise way and, when useful, mention which files you are using.';
 
-  return { prompt, usedFiles };
+  return { prompt, usedFiles, rootDir: index.root };
 }
 
 export async function buildPromptWithContext(
   question: string,
   options: BuildContextOptions = {},
-): Promise<{ prompt: string; usedFiles: string[] }> {
+): Promise<BuildContextResult> {
   const startDir = options.startDir ?? process.cwd();
   const maxFiles = options.maxFiles ?? 5;
   const maxCharsPerFile = options.maxCharsPerFile ?? 2000;
@@ -250,7 +261,7 @@ export async function buildPromptWithContext(
       'No specific files matched the question keywords; answer based only on the question.\n\n' +
       `Question: ${question}`;
 
-    return { prompt, usedFiles: [] };
+    return { prompt, usedFiles: [], rootDir: index.root };
   }
 
   const contextBlocks: string[] = [];

@@ -1,8 +1,34 @@
+import fs from 'fs';
+import path from 'path';
 import { Command } from 'commander';
 import { askOllama, checkOllamaHealth } from './ollamaClient';
 import { buildRepoIndex } from './indexer';
 import { buildPromptWithContext } from './context';
 import { buildEmbeddingIndex } from './embeddingIndex';
+
+const colors = {
+  bold: (s: string) => `\x1b[1m${s}\x1b[0m`,
+  dim: (s: string) => `\x1b[2m${s}\x1b[0m`,
+  cyan: (s: string) => `\x1b[36m${s}\x1b[0m`,
+  yellow: (s: string) => `\x1b[33m${s}\x1b[0m`,
+};
+
+function startSpinner(text: string): () => void {
+  const frames = ['⠋', '⠙', '⠚', '⠞', '⠖', '⠦', '⠴', '⠲', '⠳', '⠓'];
+  let i = 0;
+  const interval = setInterval(() => {
+    const frame = frames[(i = (i + 1) % frames.length)];
+    process.stdout.write(`\r${frame} ${text}   `);
+  }, 80);
+
+  let stopped = false;
+  return () => {
+    if (stopped) return;
+    stopped = true;
+    clearInterval(interval);
+    process.stdout.write('\r');
+  };
+}
 
 const program = new Command();
 
@@ -28,24 +54,56 @@ program
     }
 
     try {
-      const { prompt, usedFiles } = await buildPromptWithContext(question, {
-        startDir: process.cwd(),
-      });
+      const { prompt, usedFiles, rootDir } = await buildPromptWithContext(
+        question,
+        {
+          startDir: process.cwd(),
+        },
+      );
 
       if (usedFiles.length > 0) {
-        console.log('📎 Using context from files:');
+        const baseDir = rootDir ?? process.cwd();
+        console.log(colors.bold('📎 Using context from files:\n'));
         for (const f of usedFiles) {
-          console.log(`   - ${f}`);
+          const absPath = path.isAbsolute(f)
+            ? f
+            : path.join(baseDir, f);
+          const displayPath = path.relative(process.cwd(), absPath) || absPath;
+
+          // Many terminals/editors support Cmd+Click on "path:line" format.
+          console.log(colors.cyan(`   ${displayPath}:1`));
+
+          try {
+            const content = fs.readFileSync(absPath, 'utf8');
+            const lines = content.split('\n');
+            const previewLines = lines.slice(0, 10);
+
+            for (const line of previewLines) {
+              console.log(colors.dim(`     ${line}`));
+            }
+            if (lines.length > 10) {
+              console.log(colors.dim('     ...'));
+            }
+          } catch {
+            // If we can't read the file, just skip the snippet preview.
+          }
+
+          console.log();
         }
-        console.log();
       } else {
-        console.log('ℹ️ No index or matching files found; answering from question only.');
-        console.log();
+        console.log(
+          colors.dim(
+            'ℹ️ No index or matching files found; answering from question only.\n',
+          ),
+        );
       }
 
-      console.log('🤔 Thinking...\n');
+      const stopSpinner = startSpinner(
+        `Thinking with model ${options.model}...`,
+      );
       const answer = await askOllama({ model: options.model, prompt });
-      console.log('=== repomind ===\n');
+      stopSpinner();
+      console.log(`\n${colors.bold('=== repomind ===')}\n`);
       console.log(answer.trim());
       console.log();
     } catch (err) {
